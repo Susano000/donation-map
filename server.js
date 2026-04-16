@@ -4,11 +4,7 @@ const path = require('path');
 const { initializeDatabase, pool } = require('./database');
 const { Centrifuge } = require('centrifuge');
 
-// ============================================================
-// НАСТРОЙКИ DONATIONALERTS
-// ============================================================
 const DONATION_ALERTS_API_KEY = 'v2RTn937Q9oqfQk19temgZQhFPW8aeEn81LgdrLq';
-// ============================================================
 
 const app = express();
 
@@ -23,12 +19,8 @@ initializeDatabase().then(database => {
     connectToDonationAlerts();
 }).catch(err => {
     console.error('❌ Ошибка БД:', err);
-    process.exit(1);
 });
 
-// ============================================================
-// ПОДКЛЮЧЕНИЕ К DONATION ALERTS (WebSocket)
-// ============================================================
 async function connectToDonationAlerts() {
     console.log('🔌 Подключаюсь к DonationAlerts WebSocket...');
     
@@ -80,9 +72,6 @@ async function connectToDonationAlerts() {
     centrifuge.connect();
 }
 
-// ============================================================
-// ОБРАБОТКА ДОНАТА И ОБНОВЛЕНИЕ БАЗЫ ДАННЫХ
-// ============================================================
 async function processDonation(alertData) {
     try {
         const username = alertData.username;
@@ -104,7 +93,6 @@ async function processDonation(alertData) {
             return;
         }
 
-        // Находим или создаем пользователя
         let userResult = await pool.query('SELECT id FROM users WHERE name = $1', [username]);
         let userId;
         
@@ -119,13 +107,11 @@ async function processDonation(alertData) {
             userId = userResult.rows[0].id;
         }
 
-        // Добавляем донат
         await pool.query(
             'INSERT INTO donations (user_id, country_code, amount) VALUES ($1, $2, $3)',
             [userId, country_code, amount]
         );
 
-        // Обновляем total_donated
         await pool.query(
             'UPDATE users SET total_donated = total_donated + $1 WHERE id = $2',
             [amount, userId]
@@ -182,9 +168,6 @@ async function checkAndUpdateRuler(country_code, username, user_id, amount) {
     }
 }
 
-// ============================================================
-// API ЭНДПОИНТЫ
-// ============================================================
 app.get('/api/donors/:country', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -279,14 +262,10 @@ app.get('/api/conquests/recent', async (req, res) => {
     }
 });
 
-// Тестовый эндпоинт для проверки работы сервера
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', database: !!db });
+    res.json({ status: 'ok' });
 });
 
-// ============================================================
-// ЗАПУСК СЕРВЕРА
-// ============================================================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
