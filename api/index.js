@@ -4,22 +4,15 @@ const path = require('path');
 const { Pool } = require('pg');
 const { Centrifuge } = require('centrifuge');
 
-// ============================================================
-// НАСТРОЙКИ
-// ============================================================
-const DONATION_ALERTS_API_KEY = 'v2RTn937Q9oqfQk19temgZQhFPW8aeEn81LgdrLq';
-
-// Подключение к Supabase
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+// ... остальные настройки ...
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, '../public'))); // ← исправленная строка
+
+// ... дальше инициализация БД и API ...
 
 // ============================================================
 // ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ
