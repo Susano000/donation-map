@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌍 Захват Стран | Карта Донатов</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; background: #aadaff; }
+        
+        .info-panel {
+            position: absolute; top: 20px; right: 20px; width: 300px;
+            background: rgba(255, 255, 255, 0.95); border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 15px; z-index: 1000;
+            max-height: calc(100vh - 40px); overflow-y: auto;
+        }
+        .info-panel h3 { margin: 0 0 15px; text-align: center; color: #2c3e50; }
+        .info-panel h4 { margin: 15px 0 5px; font-size: 14px; color: #555; }
+        .ranking-list { list-style: none; padding: 0; margin: 0; }
+        .ranking-list li { display: flex; justify-content: space-between; padding: 8px 5px; border-bottom: 1px solid #ecf0f1; font-size: 13px; }
+        .badge { background: #3498db; color: white; border-radius: 20px; padding: 2px 8px; font-size: 11px; font-weight: bold; }
+        
+        .map-legend {
+            position: absolute; bottom: 30px; left: 20px;
+            background: rgba(255, 255, 255, 0.95); border-radius: 12px;
+            padding: 15px; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            font-size: 12px;
+        }
+        .map-legend h4 { margin: 0 0 10px; text-align: center; }
+        .legend-item { display: flex; align-items: center; margin: 5px 0; gap: 8px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 4px; }
+        
+        .ruler-section {
+            background: linear-gradient(135deg, #f5af19 0%, #f12711 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .ruler-crown { font-size: 24px; display: block; margin-bottom: 5px; }
+        .ruler-name { font-size: 18px; font-weight: bold; }
+        .ruler-days { font-size: 12px; opacity: 0.9; margin-top: 5px; }
+        
+        .donate-btn {
+            display: inline-block; background: #f1c40f; color: #2c3e50;
+            padding: 12px 20px; border-radius: 30px; text-decoration: none;
+            font-weight: bold; margin-top: 15px; cursor: pointer; border: none; width: 100%;
+            font-size: 16px;
+        }
+        .donate-btn:hover { background: #f39c12; }
+        
+        .donate-form input {
+            width: 100%; padding: 10px; margin: 8px 0;
+            border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;
+            font-size: 14px;
+        }
+        
+        .donate-form label {
+            font-size: 13px; color: #555; margin-top: 5px; display: block;
+        }
+        
+        .conquest-toast {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 20px 40px; border-radius: 60px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3); z-index: 3000;
+            font-size: 18px; font-weight: bold; text-align: center;
+            animation: slideDown 0.5s ease, fadeOut 0.5s ease 4.5s forwards;
+        }
+        
+        @keyframes slideDown {
+            from { transform: translate(-50%, -100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; visibility: hidden; }
+        }
+        
+        .conquest-feed { margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px; }
+        .conquest-item {
+            font-size: 12px; padding: 5px; border-bottom: 1px solid #f0f0f0;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .conquest-time { color: #999; font-size: 10px; margin-left: auto; }
+        
+        .leaflet-popup-content { min-width: 320px; }
+        
+        .donate-info {
+            background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0;
+            text-align: center; font-size: 13px;
+        }
+        
+        .donate-notice {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #856404;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="map-legend">
+    <h4>🎨 Легенда</h4>
+    <div class="legend-item"><div class="legend-color" style="background: #FFD700;"></div> 🥇 Топ-3 (золото)</div>
+    <div class="legend-item"><div class="legend-color" style="background: #C0C0C0;"></div> 🥈 Топ-10 (серебро)</div>
+    <div class="legend-item"><div class="legend-color" style="background: #CD7F32;"></div> 🥉 Топ-20 (бронза)</div>
+    <div class="legend-item"><div class="legend-color" style="background: #3498db;"></div> 🔵 Участники</div>
+    <div class="legend-item"><div class="legend-color" style="background: #95a5a6;"></div> ⚪ Нет донатов</div>
+    <div class="legend-item"><div class="legend-color" style="background: #e74c3c; border: 3px solid #FFD700;"></div> 👑 Правитель >7 дней</div>
+</div>
+
+<div class="info-panel">
+    <h3>🏆 Мировой рейтинг</h3>
+    <h4>🌍 Страны</h4>
+    <ul class="ranking-list" id="country-ranking">Загрузка...</ul>
+    <h4>👤 Пользователи</h4>
+    <ul class="ranking-list" id="user-ranking">Загрузка...</ul>
+    
+    <div class="conquest-feed">
+        <h4 style="margin: 10px 0 5px;">⚔️ Последние захваты</h4>
+        <div id="conquest-list">Загрузка...</div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map', {
+        center: [20, 0],
+        zoom: 2,
+        minZoom: 2,
+        maxZoom: 8
+    });
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    // 👇 ВАША ССЫЛКА НА DONATIONALERTS
+    const DONATION_ALERTS_URL = 'https://www.donationalerts.com/r/bot_haritosha';
+    const MIN_DONATION_AMOUNT = 1; // Минимальная сумма в долларах
+
+    const flags = { 
+        'RU': '🇷🇺', 'US': '🇺🇸', 'DE': '🇩🇪', 'FR': '🇫🇷', 
+        'CN': '🇨🇳', 'BR': '🇧🇷', 'JP': '🇯🇵', 'GB': '🇬🇧',
+        'IT': '🇮🇹', 'ES': '🇪🇸', 'CA': '🇨🇦', 'AU': '🇦🇺',
+        'IN': '🇮🇳', 'MX': '🇲🇽', 'KR': '🇰🇷', 'TR': '🇹🇷',
+        'SA': '🇸🇦', 'CH': '🇨🇭', 'SE': '🇸🇪', 'NO': '🇳🇴',
+        'NL': '🇳🇱', 'BE': '🇧🇪', 'AT': '🇦🇹', 'PL': '🇵🇱',
+        'UA': '🇺🇦', 'BY': '🇧🇾', 'KZ': '🇰🇿'
+    };
+    
+    const countryNameToCode = {
+        'Russia': 'RU', 'Russian Federation': 'RU',
+        'United States': 'US', 'United States of America': 'US', 'USA': 'US',
+        'Germany': 'DE', 'France': 'FR', 'China': 'CN', 'Brazil': 'BR',
+        'Japan': 'JP', 'United Kingdom': 'GB', 'UK': 'GB', 'Italy': 'IT',
+        'Spain': 'ES', 'Canada': 'CA', 'Australia': 'AU', 'India': 'IN',
+        'Mexico': 'MX', 'South Korea': 'KR', 'Korea': 'KR', 'Turkey': 'TR',
+        'Saudi Arabia': 'SA', 'Switzerland': 'CH', 'Sweden': 'SE', 'Norway': 'NO',
+        'Netherlands': 'NL', 'Belgium': 'BE', 'Austria': 'AT', 'Poland': 'PL',
+        'Ukraine': 'UA', 'Belarus': 'BY', 'Kazakhstan': 'KZ'
+    };
+    
+    let geoJsonLayer;
+    let rulersData = {};
+    let countryRankings = [];
+
+    function getCountryColor(countryCode, totalAmount) {
+        if (!totalAmount || totalAmount === 0) return '#95a5a6';
+        const index = countryRankings.findIndex(c => c.country_code === countryCode);
+        if (index === -1) return '#3498db';
+        if (index < 3) return '#FFD700';
+        if (index < 10) return '#C0C0C0';
+        if (index < 20) return '#CD7F32';
+        return '#3498db';
+    }
+
+    function getCountryCode(feature) {
+        const props = feature.properties;
+        let code = props.ISO_A2 || props.iso_a2 || props.ISO_A3 || props.iso_a3 || '';
+        if (!code) {
+            const name = props.ADMIN || props.name || props.NAME || '';
+            code = countryNameToCode[name] || '';
+        }
+        return code;
+    }
+    
+    function getCountryName(feature) {
+        const props = feature.properties;
+        return props.ADMIN || props.name || props.NAME || 'Неизвестно';
+    }
+
+    async function loadRulers() {
+        try {
+            const res = await fetch('/api/rulers/all');
+            const data = await res.json();
+            data.rulers.forEach(r => { rulersData[r.country_code] = r; });
+            updateMapColors();
+        } catch(e) {
+            console.error('Ошибка загрузки правителей:', e);
+        }
+    }
+
+    function updateMapColors() {
+        if (!geoJsonLayer) return;
+        geoJsonLayer.eachLayer(layer => {
+            const feature = layer.feature;
+            const code = getCountryCode(feature);
+            const countryData = countryRankings.find(c => c.country_code === code);
+            const totalAmount = countryData ? countryData.total : 0;
+            let fillColor = getCountryColor(code, totalAmount);
+            
+            const ruler = rulersData[code];
+            if (ruler && ruler.days_held >= 7) {
+                layer.setStyle({ fillColor: fillColor, fillOpacity: 0.6, color: '#FFD700', weight: 3 });
+            } else {
+                layer.setStyle({ fillColor: fillColor, fillOpacity: 0.5, color: 'white', weight: 1 });
+            }
+        });
+    }
+
+    async function loadConquestHistory() {
+        try {
+            const res = await fetch('/api/conquests/recent');
+            const data = await res.json();
+            const html = data.conquests.map(c => {
+                const time = new Date(c.captured_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                return `<div class="conquest-item"><span>⚔️</span><span><b>${c.new_ruler_name}</b> захватил ${flags[c.country_code] || '🌍'} ${c.country_code}</span><span class="conquest-time">${time}</span></div>`;
+            }).join('');
+            document.getElementById('conquest-list').innerHTML = html || '<div class="conquest-item">Пока нет захватов</div>';
+        } catch(e) {
+            console.error('Ошибка истории:', e);
+        }
+    }
+
+    async function loadRankings() {
+        try {
+            const [cRes, uRes] = await Promise.all([
+                fetch('/api/rankings/countries'),
+                fetch('/api/rankings/users')
+            ]);
+            countryRankings = (await cRes.json()).rankings || [];
+            const users = (await uRes.json()).users || [];
+            
+            document.getElementById('country-ranking').innerHTML = countryRankings.map((c, i) => {
+                let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+                return `<li><span>${medal} ${flags[c.country_code] || '🌍'} ${c.country_code}</span> <span class="badge">$${c.total.toLocaleString()}</span></li>`;
+            }).join('') || '<li>Нет данных</li>';
+            
+            document.getElementById('user-ranking').innerHTML = users.map((u, i) => {
+                let icon = u.total >= 1000 ? '🌟' : u.total >= 500 ? '🏛️' : u.total >= 100 ? '🌳' : u.total >= 50 ? '🌿' : u.total >= 10 ? '🌱' : '👤';
+                let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+                return `<li><span>${medal} ${icon} ${u.name}</span> <span class="badge">$${u.total.toLocaleString()}</span></li>`;
+            }).join('') || '<li>Нет данных</li>';
+            
+            updateMapColors();
+        } catch(e) {
+            console.error('Ошибка загрузки рейтингов:', e);
+        }
+    }
+
+    async function loadCountryData(countryCode) {
+        if (!countryCode) return { donors: [], ruler: { ruler: null } };
+        try {
+            const [donorsRes, rulerRes] = await Promise.all([
+                fetch(`/api/donors/${countryCode}`),
+                fetch(`/api/country/${countryCode}/ruler`)
+            ]);
+            const donorsData = await donorsRes.json();
+            const rulerData = await rulerRes.json();
+            return { donors: donorsData.donors || [], ruler: rulerData || { ruler: null } };
+        } catch(e) {
+            return { donors: [], ruler: { ruler: null } };
+        }
+    }
+
+    async function onCountryClick(e) {
+        const layer = e.target;
+        const feature = layer.feature;
+        const countryName = getCountryName(feature);
+        const countryCode = getCountryCode(feature);
+        
+        layer.bindPopup('<div style="padding:20px;text-align:center;">⏳ Загрузка...</div>').openPopup();
+        
+        const { donors, ruler } = await loadCountryData(countryCode);
+        
+        const rankIndex = countryRankings.findIndex(c => c.country_code === countryCode);
+        let rankDisplay = rankIndex === 0 ? '🥇 1 место в мире' : rankIndex === 1 ? '🥈 2 место в мире' : rankIndex === 2 ? '🥉 3 место в мире' : rankIndex !== -1 ? `📊 ${rankIndex + 1} место в мире` : '📊 Нет в рейтинге';
+        const countryTotal = rankIndex !== -1 ? countryRankings[rankIndex].total : 0;
+        
+        let rulerHtml = '';
+        if (ruler.ruler) {
+            const daysText = ruler.days_held === 1 ? 'день' : ruler.days_held < 5 ? 'дня' : 'дней';
+            rulerHtml = `<div class="ruler-section"><span class="ruler-crown">👑</span><div class="ruler-name">${ruler.ruler}</div><div style="font-size:14px;margin:5px 0;">$${ruler.amount.toLocaleString()}</div><div class="ruler-days">Правит ${ruler.days_held} ${daysText}</div></div>`;
+        } else {
+            rulerHtml = `<div class="ruler-section" style="background: #95a5a6;"><span class="ruler-crown">🌍</span><div class="ruler-name">Нет правителя</div><div class="ruler-days">Станьте первым!</div></div>`;
+        }
+        
+        const donorsHtml = donors.length ? donors.map(d => `<li style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;"><span>👤 ${d.name} ${d.name === ruler.ruler ? '👑' : ''}</span><span style="color:#27ae60;font-weight:bold;">$${d.total.toLocaleString()}</span></li>`).join('') : '<li style="padding:10px;text-align:center;color:#999;">Пока нет донатов</li>';
+        const captureHint = ruler.ruler ? `<div class="donate-info">⚔️ Чтобы захватить страну, нужно задонатить больше <strong>$${(ruler.amount + 1).toLocaleString()}</strong></div>` : '<div class="donate-info">🎯 Станьте первым правителем этой страны!</div>';
+        
+        const popupContent = `<div style="min-width:320px;"><h3 style="margin:0 0 5px;text-align:center;">${flags[countryCode] || '🌍'} ${countryName}</h3><p style="text-align:center;margin:5px 0 15px;color:#666;">${rankDisplay} • Всего собрано: $${countryTotal.toLocaleString()}</p>${rulerHtml}<div style="font-weight:bold;margin-bottom:5px;">🏅 Топ донатеров:</div><ul style="list-style:none;padding:0;margin:0 0 10px;max-height:200px;overflow-y:auto;">${donorsHtml}</ul>${captureHint}<div style="border-top:1px dashed #ccc;padding-top:15px;"><form class="donate-form" onsubmit="donate(event, '${countryCode}', '${countryName}')"><label>👤 Ваше имя</label><input type="text" name="user_name" placeholder="Например: Иван Петров" required><label>💵 Сумма доната ($, мин. ${MIN_DONATION_AMOUNT})</label><input type="number" name="amount" placeholder="Минимум ${MIN_DONATION_AMOUNT}" min="${MIN_DONATION_AMOUNT}" step="1" required><button type="submit" class="donate-btn">💰 Поддержать ${countryName}</button></form><div class="donate-notice">⚠️ После доната напишите мне в личку для зачисления в рейтинг</div><p style="font-size:11px;margin-top:8px;color:#888;text-align:center;">Вы будете перенаправлены на DonationAlerts</p></div></div>`;
+        
+        layer.setPopupContent(popupContent);
+    }
+
+    window.donate = function(event, countryCode, countryName) {
+        event.preventDefault();
+        const form = event.target;
+        
+        const userName = form.user_name.value.trim();
+        const amount = parseFloat(form.amount.value);
+        
+        if (!userName || !amount || amount < MIN_DONATION_AMOUNT) {
+            alert(`Пожалуйста, введите имя и сумму не менее $${MIN_DONATION_AMOUNT}`);
+            return;
+        }
+        
+        // Формируем сообщение для DonationAlerts
+        const message = `Донат от ${userName} для страны ${countryName} (${countryCode})`;
+        
+        // Создаём ссылку с параметрами
+        const donationUrl = `${DONATION_ALERTS_URL}?amount=${amount}&message=${encodeURIComponent(message)}`;
+        
+        // Открываем страницу доната в новой вкладке
+        window.open(donationUrl, '_blank');
+        
+        // Показываем уведомление
+        alert(`Спасибо, ${userName}! Вы будете перенаправлены на страницу оплаты.\n\nПосле успешного доната напишите мне, и я добавлю ваш донат в рейтинг!`);
+        
+        form.reset();
+        map.closePopup();
+    };
+
+    // Загрузка карты
+    fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+        .then(r => r.json())
+        .then(data => {
+            console.log('✅ Карта загружена, стран:', data.features.length);
+            
+            geoJsonLayer = L.geoJSON(data, {
+                style: { fillColor: '#95a5a6', weight: 1, color: 'white', fillOpacity: 0.5 },
+                onEachFeature: (feature, layer) => {
+                    layer.on('click', onCountryClick);
+                    layer.on('mouseover', () => layer.setStyle({ fillOpacity: 0.8 }));
+                    layer.on('mouseout', () => {
+                        const code = getCountryCode(feature);
+                        const countryData = countryRankings.find(c => c.country_code === code);
+                        const totalAmount = countryData ? countryData.total : 0;
+                        const fillColor = getCountryColor(code, totalAmount);
+                        const ruler = rulersData[code];
+                        if (ruler && ruler.days_held >= 7) {
+                            layer.setStyle({ fillColor: fillColor, fillOpacity: 0.6, color: '#FFD700', weight: 3 });
+                        } else {
+                            layer.setStyle({ fillColor: fillColor, fillOpacity: 0.5, color: 'white', weight: 1 });
+                        }
+                    });
+                }
+            }).addTo(map);
+            
+            loadRankings().then(() => loadRulers());
+        })
+        .catch(e => console.error('❌ Ошибка загрузки карты:', e));
+
+    // Инициализация
+    loadRankings();
+    loadConquestHistory();
+    setInterval(() => { loadRankings(); loadConquestHistory(); }, 30000);
+    setInterval(loadRulers, 60000);
+</script>
+</body>
+</html>
