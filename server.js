@@ -11,7 +11,6 @@ const DONATION_ALERTS_API_KEY = 'v2RTn937Q9oqfQk19temgZQhFPW8aeEn81LgdrLq';
 // ============================================================
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -82,7 +81,7 @@ async function connectToDonationAlerts() {
 }
 
 // ============================================================
-// ОБРАБОТКА ДОНАТА (PostgreSQL)
+// ОБРАБОТКА ДОНАТА И ОБНОВЛЕНИЕ БАЗЫ ДАННЫХ
 // ============================================================
 async function processDonation(alertData) {
     try {
@@ -184,7 +183,7 @@ async function checkAndUpdateRuler(country_code, username, user_id, amount) {
 }
 
 // ============================================================
-// API ЭНДПОИНТЫ (PostgreSQL)
+// API ЭНДПОИНТЫ
 // ============================================================
 app.get('/api/donors/:country', async (req, res) => {
     try {
@@ -280,7 +279,16 @@ app.get('/api/conquests/recent', async (req, res) => {
     }
 });
 
+// Тестовый эндпоинт для проверки работы сервера
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', database: !!db });
+});
+
+// ============================================================
+// ЗАПУСК СЕРВЕРА
+// ============================================================
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
     console.log(`🌍 Сервер запущен на порту ${PORT}`);
 });
