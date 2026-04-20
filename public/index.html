@@ -9,7 +9,7 @@
         body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background: #aadaff; }
         
-        /* Кнопка открытия панели (скрыта по умолчанию) */
+        /* Кнопка открытия панели рейтинга */
         .open-panel-btn {
             position: absolute; top: 20px; right: 20px; z-index: 1001;
             background: #3498db; color: white; border: none;
@@ -19,6 +19,20 @@
             transition: transform 0.2s;
         }
         .open-panel-btn:hover {
+            transform: scale(1.1);
+            background: #2980b9;
+        }
+        
+        /* Кнопка открытия легенды */
+        .open-legend-btn {
+            position: absolute; bottom: 30px; left: 20px; z-index: 1001;
+            background: #3498db; color: white; border: none;
+            border-radius: 50%; width: 50px; height: 50px;
+            font-size: 24px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            display: none; align-items: center; justify-content: center;
+            transition: transform 0.2s;
+        }
+        .open-legend-btn:hover {
             transform: scale(1.1);
             background: #2980b9;
         }
@@ -61,8 +75,28 @@
             background: rgba(255, 255, 255, 0.95); border-radius: 12px;
             padding: 15px; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
             font-size: 12px; pointer-events: auto;
+            transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        .map-legend h4 { margin: 0 0 10px; text-align: center; }
+        .map-legend.collapsed {
+            transform: translateX(-120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .legend-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .legend-header h4 { margin: 0; text-align: center; flex: 1; }
+        .close-legend-btn {
+            background: none; border: none; font-size: 20px;
+            cursor: pointer; color: #7f8c8d; padding: 0 5px;
+            transition: color 0.2s;
+        }
+        .close-legend-btn:hover { color: #e74c3c; }
+        
         .legend-item { display: flex; align-items: center; margin: 5px 0; gap: 8px; }
         .legend-color { width: 20px; height: 20px; border-radius: 4px; }
         
@@ -139,12 +173,16 @@
 
 <div id="map"></div>
 
-<!-- Кнопка открытия панели (появляется когда панель скрыта) -->
+<!-- Кнопки открытия -->
 <button class="open-panel-btn" id="openPanelBtn" onclick="togglePanel()">📊</button>
+<button class="open-legend-btn" id="openLegendBtn" onclick="toggleLegend()">🎨</button>
 
 <!-- Легенда -->
-<div class="map-legend">
-    <h4>🎨 Легенда</h4>
+<div class="map-legend" id="mapLegend">
+    <div class="legend-header">
+        <h4>🎨 Легенда</h4>
+        <button class="close-legend-btn" onclick="toggleLegend()">✕</button>
+    </div>
     <div class="legend-item"><div class="legend-color" style="background: #FFD700;"></div> 🥇 Топ-3 (золото)</div>
     <div class="legend-item"><div class="legend-color" style="background: #C0C0C0;"></div> 🥈 Топ-10 (серебро)</div>
     <div class="legend-item"><div class="legend-color" style="background: #CD7F32;"></div> 🥉 Топ-20 (бронза)</div>
@@ -173,7 +211,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     // ============================================================
-    // ФУНКЦИЯ ДЛЯ СВОРАЧИВАНИЯ/РАЗВОРАЧИВАНИЯ ПАНЕЛИ
+    // ФУНКЦИИ ДЛЯ СВОРАЧИВАНИЯ/РАЗВОРАЧИВАНИЯ
     // ============================================================
     window.togglePanel = function() {
         const panel = document.getElementById('infoPanel');
@@ -188,8 +226,21 @@
         }
     };
 
+    window.toggleLegend = function() {
+        const legend = document.getElementById('mapLegend');
+        const openBtn = document.getElementById('openLegendBtn');
+        
+        legend.classList.toggle('collapsed');
+        
+        if (legend.classList.contains('collapsed')) {
+            openBtn.style.display = 'flex';
+        } else {
+            openBtn.style.display = 'none';
+        }
+    };
+
     // ============================================================
-    // ОСТАЛЬНОЙ КОД
+    // ОСТАЛЬНОЙ КОД (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
     const map = L.map('map', {
         center: [20, 0],
