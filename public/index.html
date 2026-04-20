@@ -422,18 +422,37 @@
     }
 
     window.donate = function(event, countryCode, countryName) {
-        event.preventDefault();
-        const form = event.target;
-        const userName = form.user_name.value.trim();
-        const amount = parseFloat(form.amount.value);
-        if (!userName || !amount || amount < MIN_DONATION_AMOUNT) { alert(`Пожалуйста, введите имя и сумму не менее $${MIN_DONATION_AMOUNT}`); return; }
-        const message = `Донат от ${userName} для страны ${countryName} (${countryCode})`;
-        const donationUrl = `${DONATION_ALERTS_URL}?amount=${amount}&message=${encodeURIComponent(message)}`;
-        window.open(donationUrl, '_blank');
-        alert(`Спасибо, ${userName}! Вы будете перенаправлены на страницу оплаты.\n\nПосле успешного доната напишите мне, и я добавлю ваш донат в рейтинг!`);
-        form.reset();
-        map.closePopup();
-    };
+    event.preventDefault();
+    const form = event.target;
+    
+    const userName = form.user_name.value.trim();
+    const amount = parseFloat(form.amount.value);
+    
+    if (!userName || !amount || amount < MIN_DONATION_AMOUNT) {
+        alert(`Пожалуйста, введите имя и сумму не менее $${MIN_DONATION_AMOUNT}`);
+        return false;
+    }
+    
+    const message = `Донат от ${userName} для страны ${countryName} (${countryCode})`;
+    const donationUrl = `${DONATION_ALERTS_URL}?amount=${amount}&message=${encodeURIComponent(message)}`;
+    
+    console.log('🔗 Открываю ссылку:', donationUrl);
+    
+    // Пробуем открыть в новой вкладке
+    const newWindow = window.open(donationUrl, '_blank');
+    
+    // Если браузер заблокировал всплывающее окно, открываем в той же вкладке
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        window.location.href = donationUrl;
+    }
+    
+    alert(`Спасибо, ${userName}! После успешного доната напишите мне, и я добавлю ваш донат в рейтинг!`);
+    
+    form.reset();
+    map.closePopup();
+    
+    return false;
+};
 
     fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
         .then(r => r.json())
