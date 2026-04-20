@@ -4,15 +4,24 @@ const path = require('path');
 const { Pool } = require('pg');
 const { Centrifuge } = require('centrifuge');
 
-// ... остальные настройки ...
+// ============================================================
+// НАСТРОЙКИ DONATIONALERTS
+// ============================================================
+const DONATION_ALERTS_API_KEY = 'v2RTn937Q9oqfQk19temgZQhFPW8aeEn81LgdrLq';
+
+// ============================================================
+// ПОДКЛЮЧЕНИЕ К SUPABASE
+// ============================================================
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public'))); // ← исправленная строка
-
-// ... дальше инициализация БД и API ...
+app.use(express.static(path.join(__dirname, '../public')));
 
 // ============================================================
 // ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ
@@ -63,10 +72,10 @@ async function initDatabase() {
 }
 
 // ============================================================
-// ПОДКЛЮЧЕНИЕ К DONATION ALERTS
+// ПОДКЛЮЧЕНИЕ К DONATION ALERTS (WebSocket)
 // ============================================================
 async function connectToDonationAlerts() {
-    console.log('🔌 Подключаюсь к DonationAlerts...');
+    console.log('🔌 Подключаюсь к DonationAlerts WebSocket...');
     
     const centrifuge = new Centrifuge('wss://centrifugo.donationalerts.com/connection/websocket', {
         debug: true,
@@ -79,29 +88,45 @@ async function connectToDonationAlerts() {
                 },
                 body: JSON.stringify(data)
             });
-            return await response.json();
+            const result = await response.json();
+            return result;
         }
     });
 
-    centrifuge.on('connect', () => console.log('🟢 Подключено к DonationAlerts'));
-    centrifuge.on('disconnect', () => setTimeout(connectToDonationAlerts, 5000));
+    centrifuge.on('connect', () => {
+        console.log('🟢 Подключено к DonationAlerts WebSocket. Ожидание донатов...');
+    });
+
+    centrifuge.on('disconnect', () => {
+        console.log('🔴 Соединение потеряно. Переподключение через 5 сек...');
+        setTimeout(connectToDonationAlerts, 5000);
+    });
+
+    centrifuge.on('error', (err) => {
+        console.error('❌ Ошибка соединения:', err);
+    });
 
     const sub = centrifuge.newSubscription('$alerts:donation');
     
     sub.on('publication', async (ctx) => {
-        console.log('💰 Новый донат:', ctx.data);
+        console.log('💰 [НОВЫЙ ДОНАТ] Получены данные:', JSON.stringify(ctx.data, null, 2));
         await processDonation(ctx.data);
     });
 
-    sub.on('subscribed', () => console.log('✅ Подписка на донаты активна'));
-    sub.on('error', (err) => console.error('❌ Ошибка подписки:', err));
+    sub.on('subscribed', () => {
+        console.log('✅ Успешная подписка на канал донатов!');
+    });
+
+    sub.on('error', (err) => {
+        console.error('❌ Ошибка подписки на канал:', err);
+    });
 
     sub.subscribe();
     centrifuge.connect();
 }
 
 // ============================================================
-// ОБРАБОТКА ДОНАТА
+// ОБРАБОТКА ДОНАТА И ОБНОВЛЕНИЕ БАЗЫ ДАННЫХ
 // ============================================================
 async function processDonation(alertData) {
     try {
@@ -109,18 +134,22 @@ async function processDonation(alertData) {
         const amount = parseFloat(alertData.amount);
         const message = alertData.message;
 
+        console.log(`📦 Обработка доната: ${username} -> $${amount}. Сообщение: "${message}"`);
+
         let country_code = null;
         if (message) {
             const match = message.match(/страны?\s+(\w+)/i);
-            if (match) country_code = match[1].toUpperCase();
+            if (match) {
+                country_code = match[1].toUpperCase();
+            }
         }
 
         if (!country_code) {
-            console.warn('⚠️ Код страны не найден в сообщении');
+            console.warn('⚠️ Не удалось извлечь код страны из сообщения.');
             return;
         }
 
-        // Пользователь
+        // Находим или создаем пользователя
         let userResult = await pool.query('SELECT id FROM users WHERE name = $1', [username]);
         let userId;
         
@@ -130,24 +159,25 @@ async function processDonation(alertData) {
                 [username, country_code, country_code]
             );
             userId = newUser.rows[0].id;
+            console.log(`👤 Создан новый пользователь: ${username}`);
         } else {
             userId = userResult.rows[0].id;
         }
 
-        // Донат
+        // Добавляем донат
         await pool.query(
             'INSERT INTO donations (user_id, country_code, amount) VALUES ($1, $2, $3)',
             [userId, country_code, amount]
         );
 
+        // Обновляем total_donated
         await pool.query(
             'UPDATE users SET total_donated = total_donated + $1 WHERE id = $2',
             [amount, userId]
         );
 
-        console.log(`✅ +$${amount} от ${username} для ${country_code}`);
+        console.log(`✅ Донат зачислен: +$${amount} для ${username} в страну ${country_code}`);
 
-        // Правитель
         await checkAndUpdateRuler(country_code, username, userId);
 
     } catch (error) {
@@ -177,7 +207,9 @@ async function checkAndUpdateRuler(country_code, username, user_id) {
         console.log(`👑 ${username} стал ПЕРВЫМ правителем ${country_code}!`);
     } else if (oldRuler.rows[0].ruler_id !== user_id && totalAmount > oldRuler.rows[0].amount) {
         await pool.query(
-            `UPDATE country_rulers SET ruler_name = $1, ruler_id = $2, amount = $3, since_date = CURRENT_DATE WHERE country_code = $4`,
+            `UPDATE country_rulers 
+             SET ruler_name = $1, ruler_id = $2, amount = $3, since_date = CURRENT_DATE
+             WHERE country_code = $4`,
             [username, user_id, totalAmount, country_code]
         );
         await pool.query(
@@ -187,7 +219,11 @@ async function checkAndUpdateRuler(country_code, username, user_id) {
         );
         console.log(`⚔️ ${username} ЗАХВАТИЛ ${country_code}, свергнув ${oldRuler.rows[0].ruler_name}!`);
     } else if (oldRuler.rows[0].ruler_id === user_id) {
-        await pool.query('UPDATE country_rulers SET amount = $1 WHERE country_code = $2', [totalAmount, country_code]);
+        await pool.query(
+            'UPDATE country_rulers SET amount = $1 WHERE country_code = $2',
+            [totalAmount, country_code]
+        );
+        console.log(`🛡️ ${username} укрепил свою власть в ${country_code}`);
     }
 }
 
@@ -289,10 +325,15 @@ app.get('/api/conquests/recent', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', database: !!pool });
 });
 
-// Запускаем инициализацию БД
+// ============================================================
+// ЗАПУСК ИНИЦИАЛИЗАЦИИ БД
+// ============================================================
 initDatabase();
 
+// ============================================================
+// ЭКСПОРТ ДЛЯ VERCEL
+// ============================================================
 module.exports = app;

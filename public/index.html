@@ -3,19 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌍 Захват Стран | Карта Донатов</title>
+    <title>🌍 Щедрые и Нищие | Карта Донатов</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; background: #aadaff; }
+        
+        /* Кнопка открытия панели (скрыта по умолчанию) */
+        .open-panel-btn {
+            position: absolute; top: 20px; right: 20px; z-index: 1001;
+            background: #3498db; color: white; border: none;
+            border-radius: 50%; width: 50px; height: 50px;
+            font-size: 24px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            display: none; align-items: center; justify-content: center;
+            transition: transform 0.2s;
+        }
+        .open-panel-btn:hover {
+            transform: scale(1.1);
+            background: #2980b9;
+        }
         
         .info-panel {
             position: absolute; top: 20px; right: 20px; width: 300px;
             background: rgba(255, 255, 255, 0.95); border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 15px; z-index: 1000;
             max-height: calc(100vh - 40px); overflow-y: auto;
+            pointer-events: auto;
+            transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        .info-panel h3 { margin: 0 0 15px; text-align: center; color: #2c3e50; }
+        .info-panel.collapsed {
+            transform: translateX(120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .panel-header h3 { margin: 0; color: #2c3e50; }
+        .close-panel-btn {
+            background: none; border: none; font-size: 24px;
+            cursor: pointer; color: #7f8c8d; padding: 0 5px;
+            transition: color 0.2s;
+        }
+        .close-panel-btn:hover { color: #e74c3c; }
+        
         .info-panel h4 { margin: 15px 0 5px; font-size: 14px; color: #555; }
         .ranking-list { list-style: none; padding: 0; margin: 0; }
         .ranking-list li { display: flex; justify-content: space-between; padding: 8px 5px; border-bottom: 1px solid #ecf0f1; font-size: 13px; }
@@ -25,7 +60,7 @@
             position: absolute; bottom: 30px; left: 20px;
             background: rgba(255, 255, 255, 0.95); border-radius: 12px;
             padding: 15px; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            font-size: 12px;
+            font-size: 12px; pointer-events: auto;
         }
         .map-legend h4 { margin: 0 0 10px; text-align: center; }
         .legend-item { display: flex; align-items: center; margin: 5px 0; gap: 8px; }
@@ -68,6 +103,7 @@
             box-shadow: 0 20px 40px rgba(0,0,0,0.3); z-index: 3000;
             font-size: 18px; font-weight: bold; text-align: center;
             animation: slideDown 0.5s ease, fadeOut 0.5s ease 4.5s forwards;
+            pointer-events: none;
         }
         
         @keyframes slideDown {
@@ -93,14 +129,9 @@
         }
         
         .donate-notice {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 8px;
-            padding: 10px;
-            margin-top: 10px;
-            font-size: 12px;
-            color: #856404;
-            text-align: center;
+            background: #fff3cd; border: 1px solid #ffc107;
+            border-radius: 8px; padding: 10px; margin-top: 10px;
+            font-size: 12px; color: #856404; text-align: center;
         }
     </style>
 </head>
@@ -108,6 +139,10 @@
 
 <div id="map"></div>
 
+<!-- Кнопка открытия панели (появляется когда панель скрыта) -->
+<button class="open-panel-btn" id="openPanelBtn" onclick="togglePanel()">📊</button>
+
+<!-- Легенда -->
 <div class="map-legend">
     <h4>🎨 Легенда</h4>
     <div class="legend-item"><div class="legend-color" style="background: #FFD700;"></div> 🥇 Топ-3 (золото)</div>
@@ -118,8 +153,12 @@
     <div class="legend-item"><div class="legend-color" style="background: #e74c3c; border: 3px solid #FFD700;"></div> 👑 Правитель >7 дней</div>
 </div>
 
-<div class="info-panel">
-    <h3>🏆 Мировой рейтинг</h3>
+<!-- Боковая панель -->
+<div class="info-panel" id="infoPanel">
+    <div class="panel-header">
+        <h3>🏆 Щедрые и Нищие</h3>
+        <button class="close-panel-btn" onclick="togglePanel()">✕</button>
+    </div>
     <h4>🌍 Страны</h4>
     <ul class="ranking-list" id="country-ranking">Загрузка...</ul>
     <h4>👤 Пользователи</h4>
@@ -133,6 +172,25 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+    // ============================================================
+    // ФУНКЦИЯ ДЛЯ СВОРАЧИВАНИЯ/РАЗВОРАЧИВАНИЯ ПАНЕЛИ
+    // ============================================================
+    window.togglePanel = function() {
+        const panel = document.getElementById('infoPanel');
+        const openBtn = document.getElementById('openPanelBtn');
+        
+        panel.classList.toggle('collapsed');
+        
+        if (panel.classList.contains('collapsed')) {
+            openBtn.style.display = 'flex';
+        } else {
+            openBtn.style.display = 'none';
+        }
+    };
+
+    // ============================================================
+    // ОСТАЛЬНОЙ КОД
+    // ============================================================
     const map = L.map('map', {
         center: [20, 0],
         zoom: 2,
@@ -144,9 +202,8 @@
         attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // 👇 ВАША ССЫЛКА НА DONATIONALERTS
     const DONATION_ALERTS_URL = 'https://www.donationalerts.com/r/bot_haritosha';
-    const MIN_DONATION_AMOUNT = 1; // Минимальная сумма в долларах
+    const MIN_DONATION_AMOUNT = 1;
 
     const flags = { 
         'RU': '🇷🇺', 'US': '🇺🇸', 'DE': '🇩🇪', 'FR': '🇫🇷', 
@@ -316,37 +373,21 @@
     window.donate = function(event, countryCode, countryName) {
         event.preventDefault();
         const form = event.target;
-        
         const userName = form.user_name.value.trim();
         const amount = parseFloat(form.amount.value);
-        
-        if (!userName || !amount || amount < MIN_DONATION_AMOUNT) {
-            alert(`Пожалуйста, введите имя и сумму не менее $${MIN_DONATION_AMOUNT}`);
-            return;
-        }
-        
-        // Формируем сообщение для DonationAlerts
+        if (!userName || !amount || amount < MIN_DONATION_AMOUNT) { alert(`Пожалуйста, введите имя и сумму не менее $${MIN_DONATION_AMOUNT}`); return; }
         const message = `Донат от ${userName} для страны ${countryName} (${countryCode})`;
-        
-        // Создаём ссылку с параметрами
         const donationUrl = `${DONATION_ALERTS_URL}?amount=${amount}&message=${encodeURIComponent(message)}`;
-        
-        // Открываем страницу доната в новой вкладке
         window.open(donationUrl, '_blank');
-        
-        // Показываем уведомление
         alert(`Спасибо, ${userName}! Вы будете перенаправлены на страницу оплаты.\n\nПосле успешного доната напишите мне, и я добавлю ваш донат в рейтинг!`);
-        
         form.reset();
         map.closePopup();
     };
 
-    // Загрузка карты
     fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
         .then(r => r.json())
         .then(data => {
             console.log('✅ Карта загружена, стран:', data.features.length);
-            
             geoJsonLayer = L.geoJSON(data, {
                 style: { fillColor: '#95a5a6', weight: 1, color: 'white', fillOpacity: 0.5 },
                 onEachFeature: (feature, layer) => {
@@ -366,12 +407,10 @@
                     });
                 }
             }).addTo(map);
-            
             loadRankings().then(() => loadRulers());
         })
         .catch(e => console.error('❌ Ошибка загрузки карты:', e));
 
-    // Инициализация
     loadRankings();
     loadConquestHistory();
     setInterval(() => { loadRankings(); loadConquestHistory(); }, 30000);
